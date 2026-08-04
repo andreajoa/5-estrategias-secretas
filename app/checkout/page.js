@@ -56,8 +56,11 @@ export default function CheckoutPage() {
 
           <div className="priceLine">
             <div>
-              <span>Pagamento único</span>
-              <strong>R$ 19,90</strong>
+              <span>Oferta especial</span>
+              <small style={{ display: 'block', marginTop: 4, color: 'rgba(255,255,255,.72)', textAlign: 'left' }}>
+                De <s>R$ 19,90</s> por
+              </small>
+              <strong>R$ 5,10</strong>
             </div>
             <small>Sem mensalidade<br />Sem cobrança recorrente</small>
           </div>
