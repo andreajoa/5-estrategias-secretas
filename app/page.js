@@ -59,9 +59,10 @@ export default function Home() {
 
             <div className="heroOffer">
               <div>
-                <small>Pagamento único</small>
-                <strong>R$ 19,90</strong>
-                <span>sem assinatura</span>
+                <small>Oferta especial</small>
+                <span style={{ marginBottom: 5 }}>De <s>R$ 19,90</s> por</span>
+                <strong>R$ 5,10</strong>
+                <span>pagamento único • sem assinatura</span>
               </div>
               <Link className="button primary" href="/checkout">
                 Quero aplicar as 5 estratégias <span aria-hidden="true">→</span>
@@ -175,9 +176,10 @@ export default function Home() {
           </div>
           <div className="priceCard">
             <img src={apostilaCover} alt="Capa da apostila" />
-            <small>Acesso digital</small>
-            <strong>R$ 19,90</strong>
-            <span>pagamento único</span>
+            <small>Oferta especial</small>
+            <span>De <s>R$ 19,90</s> por</span>
+            <strong>R$ 5,10</strong>
+            <span>pagamento único • sem assinatura</span>
             <Link className="button paper" href="/checkout">Acessar a apostila agora</Link>
             <em>Checkout embedded e seguro</em>
           </div>
