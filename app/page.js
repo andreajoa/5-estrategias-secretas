@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import BackgroundRemovedImage from './components/BackgroundRemovedImage';
 import { apostilaCover, margarethPhoto } from './mediaData';
 
 const strategies = [
@@ -73,10 +74,11 @@ export default function Home() {
 
           <div className="coverStage">
             <div className="coverGlow" aria-hidden="true" />
-            <img
+            <BackgroundRemovedImage
               className="apostilaCover"
               src={apostilaCover}
               alt="Apostila em espiral 5 Estratégias Secretas para Comunicação com Autismo, de Margareth Almeida"
+              loading="eager"
             />
             <span className="coverBadge">
               Material visual<br />
@@ -175,7 +177,7 @@ export default function Home() {
             </p>
           </div>
           <div className="priceCard">
-            <img src={apostilaCover} alt="Capa da apostila" />
+            <BackgroundRemovedImage className="offerCover" src={apostilaCover} alt="Capa da apostila 5 Estratégias Secretas para Comunicação com Autismo" />
             <small>Oferta especial</small>
             <span>De <s>R$ 19,90</s> por</span>
             <strong>R$ 5,10</strong>
