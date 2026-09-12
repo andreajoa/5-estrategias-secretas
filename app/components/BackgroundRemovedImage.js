@@ -191,7 +191,13 @@ export default function BackgroundRemovedImage({ src, alt, className = '', loadi
       src={processedSrc || src}
       alt={alt}
       loading={loading}
+      fetchPriority={loading === 'eager' ? 'high' : 'auto'}
       decoding="async"
+      draggable="false"
+      style={{
+        background: 'transparent',
+        mixBlendMode: processedSrc ? 'normal' : 'multiply',
+      }}
     />
   );
 }
