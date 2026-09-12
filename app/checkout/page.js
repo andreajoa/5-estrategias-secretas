@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import CheckoutForm from './CheckoutForm';
+import BackgroundRemovedImage from '../components/BackgroundRemovedImage';
 import { apostilaCover, margarethPhoto } from '../mediaData';
 
 export const metadata = {
@@ -46,7 +47,12 @@ export default function CheckoutPage() {
 
         <aside className="paymentCard">
           <div className="productMini">
-            <img className="checkoutCover" src={apostilaCover} alt="Capa da apostila 5 Estratégias para Comunicação com Autismo" />
+            <BackgroundRemovedImage
+              className="checkoutCover"
+              src={apostilaCover}
+              alt="Capa da apostila 5 Estratégias para Comunicação com Autismo"
+              loading="eager"
+            />
             <div>
               <small>APOSTILA DIGITAL ILUSTRADA</small>
               <h2>5 Estratégias para Comunicação com Autismo</h2>
