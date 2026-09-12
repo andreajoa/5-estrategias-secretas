@@ -4,34 +4,7 @@ import { useEffect, useState } from 'react';
 
 const processedImageCache = new Map();
 
-function getBackgroundColor(pixels, width, height) {
-  const patch = Math.max(6, Math.round(Math.min(width, height) * 0.018));
-  const samples = [];
-  const corners = [
-    [0, 0],
-    [Math.max(0, width - patch), 0],
-  ];
-
-  for (const [startX, startY] of corners) {
-    for (let y = startY; y < Math.min(height, startY + patch); y += 2) {
-      for (let x = startX; x < Math.min(width, startX + patch); x += 2) {
-        const offset = (y * width + x) * 4;
-        if (pixels[offset + 3] > 220) {
-          samples.push([pixels[offset], pixels[offset + 1], pixels[offset + 2]]);
-        }
-      }
-    }
-  }
-
-  if (!samples.length) return [250, 247, 243];
-
-  return samples.reduce(
-    (acc, color) => [acc[0] + color[0] / samples.length, acc[1] + color[1] / samples.length, acc[2] + color[2] / samples.length],
-    [0, 0, 0],
-  );
-}
-
-function removeConnectedBackground(src) {
+function removeCoverBackground(src) {
   if (processedImageCache.has(src)) return processedImageCache.get(src);
 
   const task = new Promise((resolve) => {
@@ -40,116 +13,127 @@ function removeConnectedBackground(src) {
 
     image.onload = () => {
       try {
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        if (!width || !height) {
+          resolve(src);
+          return;
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
+        canvas.width = width;
+        canvas.height = height;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         context.drawImage(image, 0, 0);
 
-        const frame = context.getImageData(0, 0, canvas.width, canvas.height);
-        const pixels = frame.data;
-        const width = canvas.width;
-        const height = canvas.height;
-        const total = width * height;
+        const sourceFrame = context.getImageData(0, 0, width, height);
+        const pixels = sourceFrame.data;
+        const cornerIndexes = [0, width - 1, (height - 1) * width, width * height - 1];
+        const transparentCorners = cornerIndexes.filter((index) => pixels[index * 4 + 3] < 32).length;
 
-        const cornersAreTransparent = [0, width - 1, (height - 1) * width, total - 1]
-          .filter((index) => pixels[index * 4 + 3] < 32).length >= 3;
-
-        if (cornersAreTransparent) {
+        if (transparentCorners >= 3) {
           resolve(src);
           return;
         }
 
-        const [bgR, bgG, bgB] = getBackgroundColor(pixels, width, height);
-        const visited = new Uint8Array(total);
-        const queue = new Int32Array(total);
-        let head = 0;
-        let tail = 0;
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = width;
+        maskCanvas.height = height;
+        const maskContext = maskCanvas.getContext('2d');
+        maskContext.clearRect(0, 0, width, height);
+        maskContext.fillStyle = '#fff';
 
-        const canRemove = (index) => {
-          const offset = index * 4;
-          if (pixels[offset + 3] < 16) return true;
+        // The product image is a fixed spiral-bound apostila mockup. This mask
+        // follows the notebook body instead of trying to key out light colors,
+        // which protects the cream cover from being erased with the background.
+        maskContext.beginPath();
+        maskContext.moveTo(width * 0.142, height * 0.071);
+        maskContext.lineTo(width * 0.869, height * 0.041);
+        maskContext.lineTo(width * 0.869, height * 0.927);
+        maskContext.lineTo(width * 0.151, height * 0.952);
+        maskContext.closePath();
+        maskContext.fill();
 
-          const r = pixels[offset];
-          const g = pixels[offset + 1];
-          const b = pixels[offset + 2];
-          const distance = Math.hypot(r - bgR, g - bgG, b - bgB);
-          const brightness = (r + g + b) / 3;
-          const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+        // Preserve the dark metal spiral that extends outside the notebook body.
+        const spiralCanvas = document.createElement('canvas');
+        spiralCanvas.width = width;
+        spiralCanvas.height = height;
+        const spiralContext = spiralCanvas.getContext('2d');
+        const spiralFrame = spiralContext.createImageData(width, height);
+        const spiralPixels = spiralFrame.data;
+        const maxX = Math.floor(width * 0.238);
+        const minX = Math.floor(width * 0.07);
+        const minY = Math.floor(height * 0.065);
+        const maxY = Math.floor(height * 0.962);
 
-          return (
-            (distance < 68 && brightness > 170) ||
-            (distance < 94 && brightness > 205 && chroma < 42)
-          );
-        };
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const offset = (y * width + x) * 4;
+            const r = pixels[offset];
+            const g = pixels[offset + 1];
+            const b = pixels[offset + 2];
+            const brightness = (r + g + b) / 3;
+            const darkest = Math.min(r, g, b);
+            const lightest = Math.max(r, g, b);
 
-        const enqueue = (index) => {
-          if (index < 0 || index >= total || visited[index] || !canRemove(index)) return;
-          visited[index] = 1;
-          queue[tail++] = index;
-        };
-
-        for (let x = 0; x < width; x += 1) {
-          enqueue(x);
-          enqueue((height - 1) * width + x);
+            if (brightness < 152 && lightest - darkest < 95) {
+              spiralPixels[offset] = 255;
+              spiralPixels[offset + 1] = 255;
+              spiralPixels[offset + 2] = 255;
+              spiralPixels[offset + 3] = 255;
+            }
+          }
         }
+
+        spiralContext.putImageData(spiralFrame, 0, 0);
+        for (let dy = -2; dy <= 2; dy += 2) {
+          for (let dx = -2; dx <= 2; dx += 2) {
+            maskContext.drawImage(spiralCanvas, dx, dy);
+          }
+        }
+
+        context.globalCompositeOperation = 'destination-in';
+        context.drawImage(maskCanvas, 0, 0);
+        context.globalCompositeOperation = 'source-over';
+
+        const maskedFrame = context.getImageData(0, 0, width, height);
+        const maskedPixels = maskedFrame.data;
+        let minContentX = width;
+        let minContentY = height;
+        let maxContentX = -1;
+        let maxContentY = -1;
+
         for (let y = 0; y < height; y += 1) {
-          enqueue(y * width);
-          enqueue(y * width + width - 1);
-        }
-
-        while (head < tail) {
-          const index = queue[head++];
-          const x = index % width;
-          const y = Math.floor(index / width);
-          if (x > 0) enqueue(index - 1);
-          if (x < width - 1) enqueue(index + 1);
-          if (y > 0) enqueue(index - width);
-          if (y < height - 1) enqueue(index + width);
-        }
-
-        let minX = width;
-        let minY = height;
-        let maxX = -1;
-        let maxY = -1;
-
-        for (let index = 0; index < total; index += 1) {
-          const offset = index * 4;
-          if (visited[index]) {
-            pixels[offset + 3] = 0;
-            continue;
-          }
-          if (pixels[offset + 3] > 12) {
-            const x = index % width;
-            const y = Math.floor(index / width);
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
+          for (let x = 0; x < width; x += 1) {
+            const alpha = maskedPixels[(y * width + x) * 4 + 3];
+            if (alpha > 12) {
+              if (x < minContentX) minContentX = x;
+              if (x > maxContentX) maxContentX = x;
+              if (y < minContentY) minContentY = y;
+              if (y > maxContentY) maxContentY = y;
+            }
           }
         }
 
-        context.putImageData(frame, 0, 0);
-
-        if (maxX < minX || maxY < minY) {
+        if (maxContentX < minContentX || maxContentY < minContentY) {
           resolve(src);
           return;
         }
 
-        const padding = Math.max(2, Math.round(Math.min(width, height) * 0.006));
-        minX = Math.max(0, minX - padding);
-        minY = Math.max(0, minY - padding);
-        maxX = Math.min(width - 1, maxX + padding);
-        maxY = Math.min(height - 1, maxY + padding);
+        const padding = Math.max(3, Math.round(Math.min(width, height) * 0.006));
+        minContentX = Math.max(0, minContentX - padding);
+        minContentY = Math.max(0, minContentY - padding);
+        maxContentX = Math.min(width - 1, maxContentX + padding);
+        maxContentY = Math.min(height - 1, maxContentY + padding);
 
         const cropped = document.createElement('canvas');
-        cropped.width = maxX - minX + 1;
-        cropped.height = maxY - minY + 1;
+        cropped.width = maxContentX - minContentX + 1;
+        cropped.height = maxContentY - minContentY + 1;
         const croppedContext = cropped.getContext('2d');
         croppedContext.drawImage(
           canvas,
-          minX,
-          minY,
+          minContentX,
+          minContentY,
           cropped.width,
           cropped.height,
           0,
@@ -177,7 +161,7 @@ export default function BackgroundRemovedImage({ src, alt, className = '', loadi
 
   useEffect(() => {
     let active = true;
-    removeConnectedBackground(src).then((result) => {
+    removeCoverBackground(src).then((result) => {
       if (active) setProcessedSrc(result);
     });
     return () => {
